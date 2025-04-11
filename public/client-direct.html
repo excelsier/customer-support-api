@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Support - Direct Client Mode</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        .card {
+            background: #f9f9f9;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        textarea {
+            min-height: 100px;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        pre {
+            background: #f1f1f1;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .debug-info {
+            margin-top: 20px;
+            padding: 10px;
+            background: #ffe;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .note {
+            color: #777;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Customer Support - Direct Client Mode</h1>
+    <p>This page makes direct API calls to Cloudflare AutoRAG from your browser, bypassing server-side restrictions.</p>
+    
+    <div class="card">
+        <form id="supportForm">
+            <div class="form-group">
+                <label for="name">Your Name</label>
+                <input type="text" id="name" required placeholder="Enter your name">
+            </div>
+            
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" required placeholder="Enter your email">
+            </div>
+            
+            <div class="form-group">
+                <label for="question">Your Question</label>
+                <textarea id="question" required placeholder="How can we help you?"></textarea>
+            </div>
+            
+            <button type="submit">Send Question</button>
+        </form>
+    </div>
+
+    <div class="card" id="responseCard" style="display: none;">
+        <h2>Response</h2>
+        <pre id="responseData"></pre>
+    </div>
+
+    <div class="debug-info">
+        <p><strong>Note:</strong> This is a client-direct implementation that connects directly to Cloudflare without going through our serverless function.</p>
+        <p class="note">Production implementations should use a secure server-side approach with proper API key management.</p>
+    </div>
+
+    <script>
+        document.getElementById('supportForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            
+            // Show response area
+            document.getElementById('responseCard').style.display = 'block';
+            document.getElementById('responseData').innerText = 'Loading...';
+
+            // Get form data
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const question = document.getElementById('question').value;
+            
+            try {
+                // Cloudflare AutoRAG configuration
+                const accountId = 'ced558f4eac9172b07993051961ac91e';
+                const autoragName = 'sweet-glitter-e320';
+                const apiToken = 'd8WD_2cCQ3KjQQ5xvUFp3PUWqWdx_wNg5skySkfx';
+                
+                const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/autorag/rags/${autoragName}/ai-search`;
+                
+                // CORS may prevent this direct API call, but we can try
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: question,
+                        model: '@cf/meta/llama-3.1-8b-instruct-fast',
+                        rewrite_query: true,
+                        max_num_results: 5,
+                        ranking_options: {
+                            score_threshold: 0.6
+                        },
+                        stream: false,
+                        system_prompt: "You are a helpful customer support agent for Checkbox."
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status} ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                // Format and display response
+                document.getElementById('responseData').innerText = JSON.stringify({
+                    status: "success",
+                    response: data.result.response,
+                    timestamp: new Date().toISOString(),
+                    inquiryId: Math.random().toString(36).substring(2, 12),
+                    sources: data.result.data.map(doc => ({
+                        filename: doc.filename,
+                        score: doc.score
+                    }))
+                }, null, 2);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('responseData').innerText = JSON.stringify({
+                    status: "error",
+                    response: `I couldn't connect to our knowledge base at the moment. Please try again later or contact our technical support team if the issue persists.\n\nYour query was: "${question}"`,
+                    timestamp: new Date().toISOString(),
+                    inquiryId: Math.random().toString(36).substring(2, 12),
+                    error: error.message,
+                    sources: []
+                }, null, 2);
+            }
+        });
+    </script>
+</body>
+</html>
