@@ -12,6 +12,7 @@
 
 [functions]
   node_bundler = "esbuild"
+  included_files = ["enhanced-cache.js"]
 
 [[redirects]]
   from = "/api/*"
