@@ -514,8 +514,13 @@
         showThinking();
         
         try {
-          // Send request to API
-          const response = await fetch('/api/customer-support', {
+          console.log('Sending message to API:', messageText);
+          
+          // Send request to API - use the full Netlify function path to avoid redirect issues
+          const apiUrl = '/.netlify/functions/api/customer-support';
+          console.log('Using API URL:', apiUrl);
+          
+          const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -527,11 +532,16 @@
             })
           });
           
+          console.log('API response status:', response.status);
+          
           if (!response.ok) {
-            throw new Error('Failed to get response from API');
+            const errorText = await response.text();
+            console.error('Error response:', errorText);
+            throw new Error(`Failed to get response from API: ${response.status} ${response.statusText}`);
           }
           
           const data = await response.json();
+          console.log('API response data:', data);
           
           // Hide thinking animation
           hideThinking();
@@ -548,8 +558,18 @@
           // Hide thinking animation
           hideThinking();
           
-          // Show error message
-          addMessage(`I encountered an error while processing your request. Please try again later.\n\nError details: ${error.message}`, false);
+          // Add more detailed error information
+          const errorDetails = error.message || 'Unknown error';
+          
+          // Try to detect rate limiting or specific errors
+          let errorMessage = `I encountered an error while processing your request. Please try again later.`;
+          
+          if (errorDetails.includes('rate limit') || errorDetails.includes('429')) {
+            errorMessage = `I'm currently experiencing high demand and have reached a rate limit. Please try again in a few moments.`;
+          }
+          
+          // Show error message with details
+          addMessage(`${errorMessage}\n\nError details: ${errorDetails}`, false);
         }
       }
       
