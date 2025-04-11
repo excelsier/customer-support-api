@@ -516,8 +516,10 @@
         try {
           console.log('Sending message to API:', messageText);
           
-          // Send request to API - use the full Netlify function path to avoid redirect issues
-          const apiUrl = '/.netlify/functions/api/customer-support';
+          // Send request to API - use the correct Netlify function path
+          // The Express route is '/api/customer-support' but Netlify serves the function at '/.netlify/functions/api'
+          // We need to combine these correctly
+          const apiUrl = '/.netlify/functions/api/api/customer-support';
           console.log('Using API URL:', apiUrl);
           
           const response = await fetch(apiUrl, {
