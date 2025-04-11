@@ -516,10 +516,10 @@
         try {
           console.log('Sending message to API:', messageText);
           
-          // Use our new dedicated chat-api endpoint which provides a simplified routing path
-          // This bypasses any complex routing issues with the main API
-          const apiUrl = '/.netlify/functions/chat-api';
-          console.log('Using dedicated chat API URL:', apiUrl);
+          // Connect directly to the Cloudflare worker instead of going through Netlify functions
+          // This completely bypasses any routing issues with Netlify's serverless environment
+          const apiUrl = 'https://autorag-proxy.excelsier.workers.dev';
+          console.log('Connecting directly to Cloudflare worker:', apiUrl);
           
           const response = await fetch(apiUrl, {
             method: 'POST',
@@ -527,9 +527,9 @@
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              message: messageText,
-              email: userProfile.email,
-              name: userProfile.name
+              query: messageText,
+              conversation_history: conversationHistory,
+              system_prompt: "You are a helpful customer support agent for Checkbox."
             })
           });
           
@@ -547,8 +547,16 @@
           // Hide thinking animation
           hideThinking();
           
+          // Format the direct response from Cloudflare worker into our expected format
+          const formattedResponse = {
+            response: data.response,
+            timestamp: new Date().toISOString(),
+            inquiryId: Math.random().toString(36).substring(2, 12),
+            sources: data.sources || []
+          };
+          
           // Add AI response to chat
-          addMessage(data.response, false, new Date(data.timestamp), data.sources);
+          addMessage(formattedResponse.response, false, new Date(formattedResponse.timestamp), formattedResponse.sources);
           
           // Store in conversation history
           conversationHistory.push({ role: 'assistant', content: data.response });
