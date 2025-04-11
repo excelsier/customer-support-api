@@ -1,0 +1,34 @@
+{
+  "name": "customer-support-node-red",
+  "version": "1.0.0",
+  "description": "Customer support agent with Cloudflare AutoRAG integration and caching",
+  "main": "index.js",
+  "dependencies": {
+    "axios": "^0.21.4",
+    "body-parser": "^1.19.0",
+    "express": "^4.17.1",
+    "node-red": "^3.1.0",
+    "node-red-dashboard": "^3.6.0",
+    "node-red-node-email": "^3.0.3",
+    "serverless-http": "^3.2.0"
+  },
+  "node-red": {
+    "nodes": {
+      "autorag-cache": "cache_optimization.js",
+      "customer-profile": "nodes/customer-profile.js",
+      "record-response": "nodes/record-response.js",
+      "customer-api": "customer-api.js"
+    }
+  },
+  "scripts": {
+    "start": "node-red -s settings.js",
+    "start-optimized": "node optimized-api.js",
+    "test": "node test-customer-history.js",
+    "performance-test": "node performance-test.js",
+    "start-all": "node-red -s settings.js & node optimized-api.js",
+    "build": "npm install",
+    "deploy": "netlify deploy --prod"
+  },
+  "author": "",
+  "license": "MIT"
+}

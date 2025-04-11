@@ -1,0 +1,486 @@
+[
+    {
+        "id": "6a5d113e75ed72e1",
+        "type": "tab",
+        "label": "Customer Support Agent",
+        "disabled": false,
+        "info": "Customer support agent integration with Cloudflare AutoRAG with customer identification and conversation history",
+        "env": []
+    },
+    {
+        "id": "c072fd14f56e3d17",
+        "type": "http in",
+        "z": "6a5d113e75ed72e1",
+        "name": "Customer Support Endpoint",
+        "url": "/customer-support",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 170,
+        "y": 120,
+        "wires": [
+            [
+                "ec0c2d0b20a1c6e9"
+            ]
+        ]
+    },
+    {
+        "id": "ec0c2d0b20a1c6e9",
+        "type": "function",
+        "z": "6a5d113e75ed72e1",
+        "name": "Parse Message",
+        "func": "// Parse the incoming message to handle different formats\nlet message = msg.payload;\n\nif (typeof message === 'object' && message.message) {\n    // Already in the right format\n    msg.payload = message;\n} else if (typeof message === 'string') {\n    // Convert string to object format\n    msg.payload = {\n        message: message\n    };\n} else {\n    // Handle unexpected format\n    msg.payload = {\n        message: JSON.stringify(message)\n    };\n}\n\n// Store original query for later use\nmsg.original = msg.payload.message;\n\n// Initialize cache in flow context if it doesn't exist\nif (!flow.get('query_cache')) {\n    flow.set('query_cache', {});\n}\n\n// Check if the query is already in the cache\nconst cache = flow.get('query_cache');\nconst query = msg.payload.message;\nconst now = Date.now();\nconst TTL = 3600000; // 1 hour cache TTL\n\n// Clean expired cache entries\nObject.keys(cache).forEach(key => {\n    if (now - cache[key].timestamp > TTL) {\n        delete cache[key];\n    }\n});\n\n// Check for exact cache match\nif (cache[query] && now - cache[query].timestamp < TTL) {\n    msg.payload = cache[query].response;\n    msg.cached = true;\n    return [null, msg]; // Skip AutoRAG, send to output formatting\n}\n\n// No cache hit, continue normal flow\nmsg.cached = false;\nflow.set('query_cache', cache);\nreturn [msg, null];",
+        "outputs": 2,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 380,
+        "y": 120,
+        "wires": [
+            [
+                "23c47ad6e4a98bc7"
+            ],
+            [
+                "dcc1a5da8b3e6dfd"
+            ]
+        ]
+    },
+    {
+        "id": "23c47ad6e4a98bc7",
+        "type": "customer-profile",
+        "z": "6a5d113e75ed72e1",
+        "name": "Identify Customer",
+        "emailField": "payload.email",
+        "nameField": "payload.name",
+        "x": 540,
+        "y": 120,
+        "wires": [
+            [
+                "ede56b6a1d3bb94c"
+            ]
+        ]
+    },
+    {
+        "id": "ede56b6a1d3bb94c",
+        "type": "function",
+        "z": "6a5d113e75ed72e1",
+        "name": "Prepare AutoRAG Request",
+        "func": "// Store configuration in flow context for reuse\nif (!flow.get('autorag_config')) {\n    flow.set('autorag_config', {\n        account_id: 'ced558f4eac9172b07993051961ac91e', // Your Cloudflare Account ID\n        autorag_name: 'sweet-glitter-e320', // Your existing AutoRAG instance\n        api_token: 'd8WD_2cCQ3KjQQ5xvUFp3PUWqWdx_wNg5skySkfx' // Your AutoRAG API token\n    });\n}\n\nconst config = flow.get('autorag_config');\n\n// Prepare the request to Cloudflare AutoRAG\nmsg.url = `https://api.cloudflare.com/client/v4/accounts/${config.account_id}/autorag/rags/${config.autorag_name}/ai-search`;\n\n// Prepare system prompt with conversation history if available\nlet systemPrompt = \"You are a helpful customer support assistant. Be concise and accurate in your answers.\";\nlet messages = [];\n\n// Check for conversation history to include as context\nif (msg.history && Array.isArray(msg.history) && msg.history.length > 0) {\n    // Format history for the request\n    messages = msg.history;\n    node.status({fill:\"green\", shape:\"dot\", text:`Using conversation history: ${msg.history.length} messages`});\n\n    // Add current message\n    messages.push({\n        role: \"user\",\n        content: msg.payload.message\n    });\n\n    // Include customer information in system prompt if available\n    if (msg.customer) {\n        systemPrompt += ` You're speaking with ${msg.customer.name || 'a customer'}`;\n        if (msg.customer.company) {\n            systemPrompt += ` from ${msg.customer.company}`;\n        }\n        systemPrompt += \".\";\n    }\n} else {\n    // No history, just use the current message\n    messages = [{\n        role: \"user\",\n        content: msg.payload.message\n    }];\n    node.status({fill:\"yellow\", shape:\"ring\", text:\"No conversation history\"});\n}\n\nmsg.payload = {\n    query: msg.payload.message,\n    model: '@cf/meta/llama-3.1-8b-instruct-fast', // Using your existing AutoRAG model\n    rewrite_query: true,\n    max_num_results: 5,\n    ranking_options: {\n        score_threshold: 0.6\n    },\n    stream: false,\n    conversation_history: messages,\n    system_prompt: systemPrompt\n};\n\nmsg.headers = {\n    'Content-Type': 'application/json',\n    'Authorization': `Bearer ${config.api_token}`\n};\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 710,
+        "y": 120,
+        "wires": [
+            [
+                "ba4e17b99fb02f5e"
+            ]
+        ]
+    },
+    {
+        "id": "ba4e17b99fb02f5e",
+        "type": "http request",
+        "z": "6a5d113e75ed72e1",
+        "name": "AutoRAG Request",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": {},
+        "x": 940,
+        "y": 120,
+        "wires": [
+            [
+                "a0c4a6d4cbfe2ead",
+                "dcc1a5da8b3e6dfd"
+            ]
+        ]
+    },
+    {
+        "id": "dcc1a5da8b3e6dfd",
+        "type": "function",
+        "z": "6a5d113e75ed72e1",
+        "name": "Format Response",
+        "func": "if (msg.cached) {\n    // This is a cached response, just pass it through\n    // Dashboard update already happened during caching\n    return msg;\n} else if (msg.statusCode === 200 && msg.payload.success) {\n    const autoragResponse = msg.payload.result;\n    msg.payload = {\n        status: \"success\",\n        response: autoragResponse.response,\n        timestamp: new Date().toISOString(),\n        inquiryId: Math.random().toString(36).substring(2, 12),\n        sources: autoragResponse.data.map(doc => ({\n            filename: doc.filename,\n            score: doc.score\n        }))\n    };\n    \n    // Store for dashboard\n    const recentInquiries = flow.get('recentInquiries') || [];\n    recentInquiries.unshift(msg.payload);\n    if (recentInquiries.length > 10) {\n        recentInquiries.pop();\n    }\n    flow.set('recentInquiries', recentInquiries);\n    \n    // Cache the response\n    const query_cache = flow.get('query_cache') || {};\n    query_cache[msg.original] = {\n        response: msg.payload,\n        timestamp: Date.now()\n    };\n    flow.set('query_cache', query_cache);\n    \n    return msg;\n} else {\n    // Error handling\n    msg.payload = {\n        status: \"error\",\n        error: \"Failed to get response from Cloudflare AutoRAG\",\n        details: msg.payload\n    };\n    return msg;\n}",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 840,
+        "y": 200,
+        "wires": [
+            [
+                "7fdcb1ec74abdd6b"
+            ]
+        ]
+    },
+    {
+        "id": "a0c4a6d4cbfe2ead",
+        "type": "function",
+        "z": "6a5d113e75ed72e1",
+        "name": "Detect Complex Issues",
+        "func": "// Check if AutoRAG response indicates a complex issue\n// This will depend on your specific criteria\n\nlet isComplex = false;\nlet hasLowConfidence = false;\n\n// If response was successful\nif (msg.statusCode === 200 && msg.payload.success) {\n    const autoragResponse = msg.payload.result;\n    \n    // Check if confidence scores are too low\n    const lowConfidenceThreshold = 0.7;\n    hasLowConfidence = autoragResponse.data.every(doc => doc.score < lowConfidenceThreshold);\n    \n    // Check if response is too short or contains uncertainty phrases\n    const responseText = autoragResponse.response || '';\n    const uncertaintyPhrases = [\n        \"I'm not sure\", \n        \"I don't know\", \n        \"cannot determine\",\n        \"insufficient information\",\n        \"please contact support\"\n    ];\n    \n    const containsUncertainty = uncertaintyPhrases.some(phrase => \n        responseText.toLowerCase().includes(phrase.toLowerCase())\n    );\n    \n    isComplex = hasLowConfidence || containsUncertainty;\n}\n\n// Set complex flag and forward original message\nmsg.complex = isComplex;\n\n// Add reason for easier debugging\nif (isComplex) {\n    msg.complexReason = hasLowConfidence ? \"Low confidence scores\" : \"Contains uncertainty phrases\";\n}\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1170,
+        "y": 120,
+        "wires": [
+            [
+                "01d56ece20c13c5d"
+            ]
+        ]
+    },
+    {
+        "id": "01d56ece20c13c5d",
+        "type": "switch",
+        "z": "6a5d113e75ed72e1",
+        "name": "Route Complex Issues",
+        "property": "complex",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "true"
+            },
+            {
+                "t": "false"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 1390,
+        "y": 120,
+        "wires": [
+            [
+                "3d3ba6d8d69df0ef"
+            ],
+            [
+                "a0ddd69e2a0889b7"
+            ]
+        ]
+    },
+    {
+        "id": "3d3ba6d8d69df0ef",
+        "type": "e-mail",
+        "z": "6a5d113e75ed72e1",
+        "server": "smtp.example.com",
+        "port": "587",
+        "secure": true,
+        "tls": true,
+        "name": "Email Notification",
+        "dname": "Email Support Team",
+        "x": 1390,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "a0ddd69e2a0889b7",
+        "type": "function",
+        "z": "6a5d113e75ed72e1",
+        "name": "Passthrough",
+        "func": "// Just passing through for non-complex issues\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1590,
+        "y": 120,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "7fdcb1ec74abdd6b",
+        "type": "record-response",
+        "z": "6a5d113e75ed72e1",
+        "name": "Save Response History",
+        "responseField": "payload.response",
+        "x": 1060,
+        "y": 200,
+        "wires": [
+            [
+                "8f9f5c4c32bbdc75"
+            ]
+        ]
+    },
+    {
+        "id": "8f9f5c4c32bbdc75",
+        "type": "http response",
+        "z": "6a5d113e75ed72e1",
+        "name": "Send Response",
+        "statusCode": "200",
+        "headers": {
+            "content-type": "application/json"
+        },
+        "x": 1300,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "86b33cd1af8e0ea6",
+        "type": "tab",
+        "label": "Customer Support Dashboard",
+        "disabled": false,
+        "info": "Dashboard for monitoring customer support interactions",
+        "env": []
+    },
+    {
+        "id": "df1ad8ddcb13e7a2",
+        "type": "ui_tab",
+        "name": "Customer Support",
+        "icon": "dashboard",
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "e8c7bf7e90e32d1a",
+        "type": "ui_group",
+        "name": "Recent Inquiries",
+        "tab": "df1ad8ddcb13e7a2",
+        "order": 1,
+        "disp": true,
+        "width": "12",
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "f9e0ab09a7c25e92",
+        "type": "ui_group",
+        "name": "Customer Stats",
+        "tab": "df1ad8ddcb13e7a2",
+        "order": 2,
+        "disp": true,
+        "width": "6",
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "5b2a8a96a4a879d1",
+        "type": "http in",
+        "z": "86b33cd1af8e0ea6",
+        "name": "Customer List API",
+        "url": "/api/customers",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 140,
+        "y": 100,
+        "wires": [
+            [
+                "c92e51ee6fa7cea1"
+            ]
+        ]
+    },
+    {
+        "id": "c92e51ee6fa7cea1",
+        "type": "function",
+        "z": "86b33cd1af8e0ea6",
+        "name": "Get Customers",
+        "func": "// Use customer DB from global context\nconst customerDb = global.get('customerDb');\n\ntry {\n    // Get all customers\n    const customers = customerDb.getAllCustomers();\n    \n    msg.payload = {\n        status: \"success\",\n        count: customers.length,\n        customers: customers\n    };\n    \n    return msg;\n} catch (error) {\n    msg.payload = {\n        status: \"error\",\n        error: error.message\n    };\n    return msg;\n}",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 330,
+        "y": 100,
+        "wires": [
+            [
+                "6c29df5301f1c1f3"
+            ]
+        ]
+    },
+    {
+        "id": "6c29df5301f1c1f3",
+        "type": "http response",
+        "z": "86b33cd1af8e0ea6",
+        "name": "Send Response",
+        "statusCode": "200",
+        "headers": {
+            "content-type": "application/json"
+        },
+        "x": 530,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "5c1e2b6bbf41aa06",
+        "type": "http in",
+        "z": "86b33cd1af8e0ea6",
+        "name": "Customer Detail API",
+        "url": "/api/customers/:id",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 150,
+        "y": 160,
+        "wires": [
+            [
+                "a2e68b6c30eda1bb"
+            ]
+        ]
+    },
+    {
+        "id": "a2e68b6c30eda1bb",
+        "type": "function",
+        "z": "86b33cd1af8e0ea6",
+        "name": "Get Customer Detail",
+        "func": "// Use customer DB from global context\nconst customerDb = global.get('customerDb');\n\ntry {\n    // Get customer ID from URL parameter\n    const customerId = msg.req.params.id;\n    \n    // Find customer\n    const customer = customerDb.findCustomer(customerId);\n    \n    if (!customer) {\n        msg.statusCode = 404;\n        msg.payload = {\n            status: \"error\",\n            error: \"Customer not found\"\n        };\n        return msg;\n    }\n    \n    // Get customer conversations\n    const conversations = customerDb.getCustomerConversations(customer.id);\n    \n    msg.payload = {\n        status: \"success\",\n        customer: customer,\n        conversations: conversations\n    };\n    \n    return msg;\n} catch (error) {\n    msg.statusCode = 500;\n    msg.payload = {\n        status: \"error\",\n        error: error.message\n    };\n    return msg;\n}",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 350,
+        "y": 160,
+        "wires": [
+            [
+                "6c29df5301f1c1f3"
+            ]
+        ]
+    },
+    {
+        "id": "7af1107082c7e559",
+        "type": "inject",
+        "z": "86b33cd1af8e0ea6",
+        "name": "Update Dashboard",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "30",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "1",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 150,
+        "y": 220,
+        "wires": [
+            [
+                "8e5fcbd94c7ac368"
+            ]
+        ]
+    },
+    {
+        "id": "8e5fcbd94c7ac368",
+        "type": "function",
+        "z": "86b33cd1af8e0ea6",
+        "name": "Load Dashboard Data",
+        "func": "// Use customer DB from global context\nconst customerDb = global.get('customerDb');\n\ntry {\n    // Get all customers\n    const customers = customerDb.getAllCustomers();\n    \n    // Get recent inquiries from flow\n    const recentInquiries = flow.get('recentInquiries') || [];\n    \n    // Calculate basic stats\n    const totalCustomers = customers.length;\n    const totalConversations = customers.reduce((sum, customer) => sum + customer.totalConversations, 0);\n    \n    // Recent customers (last 24 hours)\n    const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);\n    const recentCustomers = customers.filter(customer => \n        new Date(customer.lastContact) > last24Hours\n    ).length;\n    \n    msg.payload = {\n        totalCustomers,\n        totalConversations,\n        recentCustomers,\n        recentInquiries\n    };\n    \n    return msg;\n} catch (error) {\n    node.error(`Dashboard error: ${error.message}`);\n    return null;\n}",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 350,
+        "y": 220,
+        "wires": [
+            [
+                "bfafdabea5dab1fb",
+                "a618b2dabc89c74e",
+                "0e3e4af598a34f44"
+            ]
+        ]
+    },
+    {
+        "id": "bfafdabea5dab1fb",
+        "type": "ui_template",
+        "z": "86b33cd1af8e0ea6",
+        "group": "e8c7bf7e90e32d1a",
+        "name": "Recent Inquiries",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "format": "<div class=\"recent-inquiries\">\n    <h3>Recent Customer Inquiries</h3>\n    <div ng-if=\"!msg.payload.recentInquiries || msg.payload.recentInquiries.length === 0\">\n        <p>No recent inquiries</p>\n    </div>\n    <div ng-repeat=\"inquiry in msg.payload.recentInquiries\" class=\"inquiry-card\">\n        <div class=\"inquiry-header\">\n            <span class=\"inquiry-id\">ID: {{inquiry.inquiryId}}</span>\n            <span class=\"inquiry-time\">{{inquiry.timestamp | date:'medium'}}</span>\n        </div>\n        <div class=\"inquiry-sources\">\n            <span ng-repeat=\"source in inquiry.sources\" class=\"source-tag\">\n                {{source.filename}} ({{source.score | number:2}})\n            </span>\n        </div>\n        <div class=\"inquiry-response\">\n            <p>{{inquiry.response}}</p>\n        </div>\n    </div>\n</div>\n\n<style>\n.recent-inquiries {\n    padding: 10px;\n}\n.inquiry-card {\n    border: 1px solid #ddd;\n    border-radius: 4px;\n    margin-bottom: 15px;\n    padding: 10px;\n    background-color: #f9f9f9;\n}\n.inquiry-header {\n    display: flex;\n    justify-content: space-between;\n    margin-bottom: 8px;\n    font-size: 0.9em;\n    color: #666;\n}\n.source-tag {\n    display: inline-block;\n    background-color: #e9f5ff;\n    border: 1px solid #cce5ff;\n    border-radius: 3px;\n    padding: 2px 6px;\n    margin-right: 5px;\n    margin-bottom: 5px;\n    font-size: 0.8em;\n}\n.inquiry-response {\n    margin-top: 10px;\n    padding-top: 10px;\n    border-top: 1px solid #eee;\n    white-space: pre-line;\n}\n</style>",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 610,
+        "y": 200,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "a618b2dabc89c74e",
+        "type": "ui_chart",
+        "z": "86b33cd1af8e0ea6",
+        "name": "Customer Stats",
+        "group": "f9e0ab09a7c25e92",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "label": "Customer Support Stats",
+        "chartType": "pie",
+        "legend": "true",
+        "xformat": "HH:mm:ss",
+        "interpolate": "linear",
+        "nodata": "",
+        "dot": false,
+        "ymin": "",
+        "ymax": "",
+        "removeOlder": 1,
+        "removeOlderPoints": "",
+        "removeOlderUnit": "3600",
+        "cutout": 0,
+        "useOneColor": false,
+        "useUTC": false,
+        "colors": [
+            "#1f77b4",
+            "#aec7e8",
+            "#ff7f0e",
+            "#2ca02c",
+            "#98df8a",
+            "#d62728",
+            "#ff9896",
+            "#9467bd",
+            "#c5b0d5"
+        ],
+        "outputs": 1,
+        "useDifferentColor": false,
+        "className": "",
+        "x": 610,
+        "y": 240,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "0e3e4af598a34f44",
+        "type": "function",
+        "z": "86b33cd1af8e0ea6",
+        "name": "Format Stats for Chart",
+        "func": "// Format for the chart\nlet chartData = [\n    { series: [\"Total Customers\"], data: [[msg.payload.totalCustomers]] },\n    { series: [\"Recent Customers (24h)\"], data: [[msg.payload.recentCustomers]] },\n    { series: [\"Total Conversations\"], data: [[msg.payload.totalConversations]] }\n];\n\nmsg.payload = chartData;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 620,
+        "y": 280,
+        "wires": [
+            [
+                "a618b2dabc89c74e"
+            ]
+        ]
+    }
+]

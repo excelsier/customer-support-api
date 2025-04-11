@@ -1,0 +1,47 @@
+<script type="text/html" data-template-name="record-response">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-responseField"><i class="fa fa-comments"></i> Response Field</label>
+        <input type="text" id="node-input-responseField" placeholder="payload.response">
+    </div>
+</script>
+
+<script type="text/html" data-help-name="record-response">
+    <p>Records bot responses in the customer conversation history.</p>
+    <h3>Inputs</h3>
+    <dl class="message-properties">
+        <dt>conversation <span class="property-type">object</span></dt>
+        <dd>The current conversation object.</dd>
+        
+        <dt>payload <span class="property-type">object | string</span></dt>
+        <dd>The response to record in the conversation history.</dd>
+    </dl>
+    <h3>Outputs</h3>
+    <dl class="message-properties">
+        <dt>conversation <span class="property-type">object</span></dt>
+        <dd>The updated conversation object with the new response recorded.</dd>
+    </dl>
+    <h3>Details</h3>
+    <p>This node records the bot's responses in the customer conversation history, 
+    allowing for continued conversation context to be maintained.</p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('record-response', {
+        category: 'customer support',
+        color: '#8BBDD9',
+        defaults: {
+            name: {value:""},
+            responseField: {value:"payload.response"}
+        },
+        inputs:1,
+        outputs:1,
+        icon: "file-text.png",
+        label: function() {
+            return this.name || "Record Response";
+        }
+    });
+</script>

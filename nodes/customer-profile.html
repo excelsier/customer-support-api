@@ -1,0 +1,61 @@
+<script type="text/html" data-template-name="customer-profile">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-emailField"><i class="fa fa-envelope"></i> Email Field</label>
+        <input type="text" id="node-input-emailField" placeholder="payload.email">
+    </div>
+    <div class="form-row">
+        <label for="node-input-nameField"><i class="fa fa-user"></i> Name Field</label>
+        <input type="text" id="node-input-nameField" placeholder="payload.name">
+    </div>
+</script>
+
+<script type="text/html" data-help-name="customer-profile">
+    <p>A node that identifies customers and maintains their conversation history.</p>
+    <h3>Inputs</h3>
+    <dl class="message-properties">
+        <dt>payload <span class="property-type">object | string</span></dt>
+        <dd>The incoming message from the customer.</dd>
+        
+        <dt class="optional">payload.email <span class="property-type">string</span></dt>
+        <dd>The customer's email address for identification.</dd>
+        
+        <dt class="optional">payload.name <span class="property-type">string</span></dt>
+        <dd>The customer's name.</dd>
+    </dl>
+    <h3>Outputs</h3>
+    <dl class="message-properties">
+        <dt>customer <span class="property-type">object</span></dt>
+        <dd>The customer profile information.</dd>
+        
+        <dt>conversation <span class="property-type">object</span></dt>
+        <dd>The current conversation object.</dd>
+        
+        <dt>history <span class="property-type">array</span></dt>
+        <dd>An array of previous message exchanges for context.</dd>
+    </dl>
+    <h3>Details</h3>
+    <p>This node identifies a customer based on their email address or creates a new customer profile if none exists. 
+    It also manages conversation history to provide context for AI responses.</p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('customer-profile', {
+        category: 'customer support',
+        color: '#8BBDD9',
+        defaults: {
+            name: {value:""},
+            emailField: {value:"payload.email"},
+            nameField: {value:"payload.name"}
+        },
+        inputs:1,
+        outputs:1,
+        icon: "user.png",
+        label: function() {
+            return this.name || "Customer Profile";
+        }
+    });
+</script>
