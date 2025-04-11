@@ -190,7 +190,7 @@ app.post('/api/customer-support', async (req, res) => {
         timestamp: new Date().toISOString(),
         inquiryId: Math.random().toString(36).substring(2, 12),
         sources: cfResponse.data.sources || []
-        };
+      };
         
         console.log('Successfully received response from Cloudflare AutoRAG');
       } catch (cloudflareError) {
