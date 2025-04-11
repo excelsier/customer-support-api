@@ -167,55 +167,65 @@ app.post('/api/customer-support', async (req, res) => {
     const autoragUrl = `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/autorag/rags/${CLOUDFLARE_AUTORAG_NAME}/ai-search`;
     
     try {
-      // For deployment demo, we'll use a mock response since we can't access the real API
-      // In production, uncomment the axios code and use real credentials
-      /*
-      const cfResponse = await axios.post(autoragUrl, {
-        query: message,
-        model: '@cf/meta/llama-3.1-8b-instruct-fast',
-        rewrite_query: true,
-        max_num_results: 5,
-        ranking_options: {
-          score_threshold: 0.6
-        },
-        stream: false,
-        conversation_history: conversationHistory,
-        system_prompt: "You are a helpful customer support agent for Checkbox."
-      }, {
-        headers: {
-          'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      // Use the configured Cloudflare credentials to make a real API call
+      console.log(`Connecting to Cloudflare AutoRAG: ${CLOUDFLARE_ACCOUNT_ID}/${CLOUDFLARE_AUTORAG_NAME}`);
       
-      const autoragResponse = cfResponse.data.result;
-      */
-      
-      // Mock response for deployment demo
-      const mockResponse = {
-        status: "success",
-        response: `Thank you for your query about "${message}". This is a deployed version of our customer support system. In production, this would connect to Cloudflare AutoRAG to provide a real answer based on our knowledge base.`,
-        timestamp: new Date().toISOString(),
-        inquiryId: Math.random().toString(36).substring(2, 12),
-        sources: [
-          {
-            filename: "example-doc.md",
-            score: 0.75
+      let response;
+      try {
+        const cfResponse = await axios.post(autoragUrl, {
+          query: message,
+          model: '@cf/meta/llama-3.1-8b-instruct-fast',
+          rewrite_query: true,
+          max_num_results: 5,
+          ranking_options: {
+            score_threshold: 0.6
+          },
+          stream: false,
+          conversation_history: conversationHistory,
+          system_prompt: "You are a helpful customer support agent for Checkbox."
+        }, {
+          headers: {
+            'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+            'Content-Type': 'application/json'
           }
-        ]
-      };
+        });
+        
+        // Use the actual Cloudflare response
+        response = {
+          status: "success",
+          response: cfResponse.data.result.response,
+          timestamp: new Date().toISOString(),
+          inquiryId: Math.random().toString(36).substring(2, 12),
+          sources: cfResponse.data.result.data.map(doc => ({
+            filename: doc.filename,
+            score: doc.score
+          }))
+        };
+        
+        console.log('Successfully received response from Cloudflare AutoRAG');
+      } catch (cloudflareError) {
+        console.error('Error connecting to Cloudflare:', cloudflareError.message);
+        // Fall back to mock response if Cloudflare call fails
+        response = {
+          status: "success",
+          response: `I couldn't connect to our knowledge base at the moment. Please try again later or contact our technical support team if the issue persists.\n\nYour query was: "${message}"`,
+          timestamp: new Date().toISOString(),
+          inquiryId: Math.random().toString(36).substring(2, 12),
+          sources: []
+        };
+      }
       
       // Record the conversation
       customer.messages.push(
         { role: 'user', content: message },
-        { role: 'assistant', content: mockResponse.response }
+        { role: 'assistant', content: response.response }
       );
       saveCustomerProfile(customerEmail, customerName, []);
       
       // Store in cache
-      cache.set(cacheKey, mockResponse);
+      cache.set(cacheKey, response);
       
-      res.json(mockResponse);
+      res.json(response);
     } catch (error) {
       console.error('Error querying AutoRAG:', error.message);
       res.status(500).json({
