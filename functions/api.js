@@ -146,7 +146,8 @@ function getCustomerProfile(email) {
 }
 
 // Main API endpoint for customer support queries
-app.post('/api/customer-support', async (req, res) => {
+// Define multiple routes to ensure compatibility with different access patterns
+app.post(['/api/customer-support', '/customer-support'], async (req, res) => {
   try {
     // Validate request
     const { message, email, name } = req.body;
@@ -324,7 +325,7 @@ app.post('/api/customer-support', async (req, res) => {
 });
 
 // Status/health endpoint
-app.get('/api/status', async (req, res) => {
+app.get(['/api/status', '/status'], async (req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -342,7 +343,7 @@ app.get('/admin', (req, res) => {
 });
 
 // API endpoint for recent inquiries
-app.get('/api/recent-inquiries', (req, res) => {
+app.get(['/api/recent-inquiries', '/recent-inquiries'], (req, res) => {
   // Get most recent inquiries from customer profiles
   const recentInquiries = [];
   
