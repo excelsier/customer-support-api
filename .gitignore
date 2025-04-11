@@ -8,6 +8,7 @@ jspm_packages/
 .env.development
 .env.test
 .env.production
+.dev.vars
 
 # Cache directories
 .npm
@@ -19,6 +20,25 @@ jspm_packages/
 logs
 *.log
 npm-debug.log*
+
+# Netlify
+.netlify
+.serverless
+
+# Build outputs
+dist/
+.netlify/
+
+# Temporary files
+functions/api.js.backup
+functions/api.js.minimal
+functions/*.backup
+
+# Local Netlify folder
+.netlify
+
+# Deployment configuration
+windsurf_deployment.yaml
 yarn-debug.log*
 yarn-error.log*
 
