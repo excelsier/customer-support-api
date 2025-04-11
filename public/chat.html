@@ -396,14 +396,56 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      // Display existing conversation if available
+      if (conversationHistory.length > 0) {
+        // Remove welcome message if conversation exists
+        messagesContainer.innerHTML = '';
+        
+        // Replay conversation history
+        conversationHistory.forEach(message => {
+          const isUser = message.role === 'user';
+          addMessage(message.content, isUser);
+        });
+        
+        console.log('Loaded existing conversation with', conversationHistory.length, 'messages');
+      }
+      
       // DOM elements
       const messagesContainer = document.getElementById('chat-messages');
       const messageInput = document.getElementById('message-input');
       const sendButton = document.getElementById('send-button');
       const clearChatButton = document.getElementById('clear-chat');
       
+      // Enhanced conversation history with localStorage persistence
+      // Generate a session ID if one doesn't exist
+      const getSessionId = () => {
+        let sessionId = localStorage.getItem('chatSessionId');
+        if (!sessionId) {
+          sessionId = 'session_' + Math.random().toString(36).substring(2, 15);
+          localStorage.setItem('chatSessionId', sessionId);
+        }
+        return sessionId;
+      };
+      
+      // Initialize session
+      const sessionId = getSessionId();
+      console.log('Chat session ID:', sessionId);
+      
+      // Load conversation history from localStorage
+      const loadConversationHistory = () => {
+        const savedHistory = localStorage.getItem(`conversationHistory_${sessionId}`);
+        return savedHistory ? JSON.parse(savedHistory) : [];
+      };
+      
+      // Save conversation history to localStorage
+      const saveConversationHistory = (history) => {
+        // Limit history size to prevent localStorage quota issues
+        const limitedHistory = history.slice(-20); // Keep last 20 messages
+        localStorage.setItem(`conversationHistory_${sessionId}`, JSON.stringify(limitedHistory));
+      };
+      
       // Conversation history
-      let conversationHistory = [];
+      let conversationHistory = loadConversationHistory();
       
       // User profile data
       const userProfile = {
@@ -414,6 +456,19 @@
       // Function to format timestamp
       function formatTime(date) {
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+      
+      // Function to optimize conversation history format for the LLM
+      function optimizeConversationHistory(history) {
+        // If history is too long, trim it but keep important context
+        if (history.length > 10) {
+          // Keep the first 2 messages for initial context
+          const initialContext = history.slice(0, 2);
+          // Keep the most recent 8 messages for recency
+          const recentContext = history.slice(-8);
+          return [...initialContext, ...recentContext];
+        }
+        return history;
       }
       
       // Function to add a message to the chat
@@ -510,6 +565,9 @@
         // Store in conversation history
         conversationHistory.push({ role: 'user', content: messageText });
         
+        // Save updated conversation history
+        saveConversationHistory(conversationHistory);
+        
         // Show thinking animation
         showThinking();
         
@@ -528,8 +586,8 @@
             },
             body: JSON.stringify({
               query: messageText,
-              conversation_history: conversationHistory,
-              system_prompt: "You are a helpful customer support agent for Checkbox."
+              conversation_history: optimizeConversationHistory(conversationHistory),
+              system_prompt: "You are a helpful customer support agent for Checkbox. You should remember the user's questions and maintain context throughout the conversation."
             })
           });
           
@@ -560,6 +618,9 @@
           
           // Store in conversation history
           conversationHistory.push({ role: 'assistant', content: data.response });
+          
+          // Save updated conversation history
+          saveConversationHistory(conversationHistory);
           
         } catch (error) {
           console.error('Error:', error);
@@ -619,6 +680,7 @@
         
         // Reset conversation history
         conversationHistory = [];
+        saveConversationHistory(conversationHistory);
       });
       
       // Focus the input field when the page loads
