@@ -1,0 +1,14 @@
+{
+  "name": "autorag-proxy",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker proxy for AutoRAG API",
+  "main": "src/index.js",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "wrangler": "^4.10.0"
+  }
+}

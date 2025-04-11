@@ -1,0 +1,7 @@
+name = "autorag-proxy"
+main = "src/index.js"
+compatibility_date = "2025-04-11"
+
+[vars]
+CLOUDFLARE_ACCOUNT_ID = "ced558f4eac9172b07993051961ac91e"
+CLOUDFLARE_AUTORAG_NAME = "sweet-glitter-e320"
