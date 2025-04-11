@@ -198,15 +198,30 @@ app.post('/api/customer-support', async (req, res) => {
       console.log('Connecting to AutoRAG through Cloudflare Worker proxy...');
       console.log(`Worker URL: ${workerUrl}`);
       
-      const cfResponse = await axios.post(workerUrl, {
-        query: message,
-        conversation_history: conversationHistory,
-        system_prompt: "You are a helpful customer support agent for Checkbox."
-      }, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      // Add retry logic with exponential backoff
+      const maxRetries = 3;
+      let retryCount = 0;
+      let lastError = null;
+      
+      // Retry request with exponential backoff
+      while (retryCount < maxRetries) {
+        try {
+          if (retryCount > 0) {
+            // Calculate backoff delay: 2^retry * 1000ms + random jitter
+            const backoffDelay = (Math.pow(2, retryCount) * 1000) + (Math.random() * 1000);
+            console.log(`Retry attempt ${retryCount}. Waiting ${Math.round(backoffDelay)}ms before retry...`);
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
+          }
+          
+          const cfResponse = await axios.post(workerUrl, {
+            query: message,
+            conversation_history: conversationHistory,
+            system_prompt: "You are a helpful customer support agent for Checkbox."
+          }, {
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
       
       response = {
         status: "success",
@@ -236,12 +251,51 @@ app.post('/api/customer-support', async (req, res) => {
           reasons: complexIssueResult.reasons
         });
       }
+          break; // Success! Exit the retry loop
+        } catch (error) {
+          lastError = error;
+          retryCount++;
+          
+          // Detect rate limiting specifically
+          const isRateLimitError = 
+            error.response?.status === 429 ||
+            error.message.includes('rate limit') ||
+            error.message.includes('too many requests');
+          
+          if (isRateLimitError) {
+            console.warn('Rate limit detected. Will retry with backoff.');
+          } else if (retryCount >= maxRetries) {
+            // On final retry, rethrow the error
+            throw error;
+          } else {
+            console.warn(`Request failed (attempt ${retryCount}/${maxRetries}): ${error.message}`);
+          }
+        }
+      }
+      
+      if (lastError) {
+        // If we exhausted all retries, throw the last error
+        throw lastError;
+      }
     } catch (cloudflareError) {
       console.error('Error connecting to Cloudflare:', cloudflareError.message);
       
+      const isRateLimit = 
+        cloudflareError.response?.status === 429 ||
+        cloudflareError.message.includes('rate limit') ||
+        cloudflareError.message.includes('too many requests');
+      
+      let errorMessage;
+      if (isRateLimit) {
+        errorMessage = `I'm currently experiencing high demand and have reached a rate limit. Please try again in a few moments.\n\nYour query was: "${message}"`;
+      } else {
+        errorMessage = `I couldn't connect to our knowledge base at the moment. Please try again later or contact our technical support team if the issue persists.\n\nYour query was: "${message}"`;
+      }
+      
       response = {
-        status: "success",
-        response: `I couldn't connect to our knowledge base at the moment. Please try again later or contact our technical support team if the issue persists.\n\nYour query was: "${message}"`,
+        status: "error",
+        error: isRateLimit ? "rate_limit_exceeded" : "connection_error",
+        response: errorMessage,
         timestamp: new Date().toISOString(),
         inquiryId: Math.random().toString(36).substring(2, 12),
         sources: []
