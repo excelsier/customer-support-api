@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Diagnostic Tool</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <style>
+    pre {
+      background-color: #f5f5f5;
+      padding: 15px;
+      border-radius: 5px;
+      max-height: 400px;
+      overflow: auto;
+    }
+    
+    .endpoint-card {
+      margin-bottom: 20px;
+    }
+    
+    .response-container {
+      margin-top: 15px;
+    }
+    
+    .status-badge {
+      font-size: 0.9rem;
+      margin-left: 10px;
+    }
+    
+    .history-item {
+      margin-bottom: 15px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #eee;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+    <div class="container">
+      <a class="navbar-brand" href="/">Customer Support API</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav">
+          <li class="nav-item">
+            <a class="nav-link" href="/">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/chat.html">Chat</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" href="/diagnostic.html">Diagnostic</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/admin">Admin</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h1 class="mb-4">API Diagnostic Tool</h1>
+    <p class="lead mb-4">Use this tool to test different API endpoints and configurations.</p>
+    
+    <div class="row">
+      <div class="col-md-8">
+        <div class="card endpoint-card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">API Request Tester</h5>
+            <span id="status-badge" class="badge status-badge">Ready</span>
+          </div>
+          <div class="card-body">
+            <form id="api-tester-form">
+              <div class="mb-3">
+                <label for="endpoint-url" class="form-label">Endpoint URL</label>
+                <input type="text" class="form-control" id="endpoint-url" value="/.netlify/functions/diagnostic" required>
+              </div>
+              
+              <div class="mb-3">
+                <label for="request-method" class="form-label">Method</label>
+                <select class="form-select" id="request-method">
+                  <option value="GET">GET</option>
+                  <option value="POST">POST</option>
+                </select>
+              </div>
+              
+              <div class="mb-3">
+                <label for="request-body" class="form-label">Request Body (JSON)</label>
+                <textarea class="form-control" id="request-body" rows="5" placeholder='{"message": "Test message"}'></textarea>
+              </div>
+              
+              <button type="submit" class="btn btn-primary">Send Request</button>
+              <button type="button" id="clear-btn" class="btn btn-outline-secondary ms-2">Clear Results</button>
+            </form>
+            
+            <div class="response-container">
+              <h6 class="mt-4">Response:</h6>
+              <div class="d-flex align-items-center mb-2">
+                <span class="me-2">Status:</span>
+                <span id="response-status" class="badge bg-secondary">-</span>
+                <span class="mx-3">Time:</span>
+                <span id="response-time">-</span>
+              </div>
+              <pre id="response-data">No response yet</pre>
+            </div>
+          </div>
+        </div>
+        
+        <div class="card mt-4">
+          <div class="card-header">
+            <h5 class="mb-0">Quick Test Buttons</h5>
+          </div>
+          <div class="card-body">
+            <div class="d-flex flex-wrap gap-2">
+              <button class="btn btn-outline-primary quick-test" data-url="/.netlify/functions/diagnostic">Test Diagnostic API</button>
+              <button class="btn btn-outline-primary quick-test" data-url="/.netlify/functions/diagnostic/health">Test Health Endpoint</button>
+              <button class="btn btn-outline-primary quick-test" data-url="/.netlify/functions/api/customer-support" data-method="POST" data-body='{"message":"Test message","email":"test@example.com","name":"Test User"}'>Test Customer Support</button>
+              <button class="btn btn-outline-primary quick-test" data-url="/.netlify/functions/api/status">Test API Status</button>
+              <button class="btn btn-outline-primary quick-test" data-url="/api/customer-support" data-method="POST" data-body='{"message":"Test message","email":"test@example.com","name":"Test User"}'>Test Redirect Path</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Request History</h5>
+            <button id="clear-history-btn" class="btn btn-sm btn-outline-danger">Clear</button>
+          </div>
+          <div class="card-body">
+            <div id="history-container">
+              <p class="text-muted">No requests yet</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Elements
+      const form = document.getElementById('api-tester-form');
+      const endpointUrlInput = document.getElementById('endpoint-url');
+      const requestMethodSelect = document.getElementById('request-method');
+      const requestBodyTextarea = document.getElementById('request-body');
+      const statusBadge = document.getElementById('status-badge');
+      const responseStatus = document.getElementById('response-status');
+      const responseTime = document.getElementById('response-time');
+      const responseData = document.getElementById('response-data');
+      const clearBtn = document.getElementById('clear-btn');
+      const historyContainer = document.getElementById('history-container');
+      const clearHistoryBtn = document.getElementById('clear-history-btn');
+      const quickTestButtons = document.querySelectorAll('.quick-test');
+      
+      // Request history
+      let requestHistory = [];
+      
+      // Function to format JSON
+      function formatJSON(json) {
+        try {
+          return JSON.stringify(json, null, 2);
+        } catch (e) {
+          return json;
+        }
+      }
+      
+      // Function to update status badge
+      function updateStatus(status, isError = false) {
+        statusBadge.textContent = status;
+        statusBadge.className = 'badge status-badge ' + (isError ? 'bg-danger' : 'bg-success');
+      }
+      
+      // Function to send request
+      async function sendRequest(url, method, body) {
+        // Update UI
+        updateStatus('Loading...', false);
+        statusBadge.className = 'badge status-badge bg-warning';
+        responseStatus.textContent = '-';
+        responseStatus.className = 'badge bg-secondary';
+        responseTime.textContent = '-';
+        responseData.textContent = 'Sending request...';
+        
+        // Start timer
+        const startTime = new Date();
+        
+        // Prepare options
+        const options = {
+          method: method,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        };
+        
+        // Add body if method is POST
+        if (method === 'POST' && body) {
+          try {
+            options.body = typeof body === 'string' ? body : JSON.stringify(body);
+          } catch (e) {
+            updateStatus('Invalid JSON', true);
+            responseData.textContent = 'Error: ' + e.message;
+            return;
+          }
+        }
+        
+        try {
+          // Send request
+          const response = await fetch(url, options);
+          
+          // Calculate time
+          const endTime = new Date();
+          const timeTaken = endTime - startTime;
+          
+          // Update response time
+          responseTime.textContent = `${timeTaken}ms`;
+          
+          // Update response status
+          responseStatus.textContent = response.status;
+          responseStatus.className = 'badge ' + (response.ok ? 'bg-success' : 'bg-danger');
+          
+          // Get response data
+          let data;
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            data = await response.json();
+            responseData.textContent = formatJSON(data);
+          } else {
+            data = await response.text();
+            responseData.textContent = data;
+          }
+          
+          // Update status
+          updateStatus('Success', false);
+          
+          // Add to history
+          addToHistory({
+            url: url,
+            method: method,
+            body: body,
+            status: response.status,
+            time: timeTaken,
+            response: data
+          });
+        } catch (error) {
+          console.error('Error:', error);
+          
+          // Update UI
+          updateStatus('Error', true);
+          responseStatus.textContent = 'Error';
+          responseStatus.className = 'badge bg-danger';
+          responseTime.textContent = '-';
+          responseData.textContent = 'Error: ' + error.message;
+          
+          // Add to history
+          addToHistory({
+            url: url,
+            method: method,
+            body: body,
+            status: 'Error',
+            time: new Date() - startTime,
+            error: error.message
+          });
+        }
+      }
+      
+      // Function to add to history
+      function addToHistory(requestData) {
+        // Add to history array
+        requestHistory.unshift(requestData);
+        
+        // Limit history to 10 items
+        if (requestHistory.length > 10) {
+          requestHistory.pop();
+        }
+        
+        // Update history UI
+        updateHistoryUI();
+      }
+      
+      // Function to update history UI
+      function updateHistoryUI() {
+        if (requestHistory.length === 0) {
+          historyContainer.innerHTML = '<p class="text-muted">No requests yet</p>';
+          return;
+        }
+        
+        historyContainer.innerHTML = '';
+        
+        requestHistory.forEach((request, index) => {
+          const historyItem = document.createElement('div');
+          historyItem.className = 'history-item';
+          
+          const statusClass = request.status === 200 || request.status === 'Success' ? 'bg-success' : 'bg-danger';
+          
+          historyItem.innerHTML = `
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <strong>${request.method}</strong> ${request.url.split('/').pop()}
+                <div class="text-muted small">${new Date().toLocaleTimeString()}</div>
+              </div>
+              <span class="badge ${statusClass}">${request.status}</span>
+            </div>
+            <div class="mt-1">
+              <button class="btn btn-sm btn-outline-secondary replay-btn" data-index="${index}">Replay</button>
+              <button class="btn btn-sm btn-outline-primary view-btn" data-index="${index}">View</button>
+            </div>
+          `;
+          
+          historyContainer.appendChild(historyItem);
+        });
+        
+        // Add event listeners for replay and view buttons
+        document.querySelectorAll('.replay-btn').forEach(btn => {
+          btn.addEventListener('click', function() {
+            const index = parseInt(this.dataset.index);
+            const request = requestHistory[index];
+            
+            // Set form values
+            endpointUrlInput.value = request.url;
+            requestMethodSelect.value = request.method;
+            requestBodyTextarea.value = request.body ? formatJSON(request.body) : '';
+            
+            // Send request
+            sendRequest(request.url, request.method, request.body);
+          });
+        });
+        
+        document.querySelectorAll('.view-btn').forEach(btn => {
+          btn.addEventListener('click', function() {
+            const index = parseInt(this.dataset.index);
+            const request = requestHistory[index];
+            
+            // Show response
+            responseStatus.textContent = request.status;
+            responseStatus.className = 'badge ' + (request.status === 200 || request.status === 'Success' ? 'bg-success' : 'bg-danger');
+            responseTime.textContent = `${request.time}ms`;
+            
+            if (request.response) {
+              responseData.textContent = formatJSON(request.response);
+            } else if (request.error) {
+              responseData.textContent = 'Error: ' + request.error;
+            }
+          });
+        });
+      }
+      
+      // Event listener for form submission
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const url = endpointUrlInput.value.trim();
+        const method = requestMethodSelect.value;
+        let body = null;
+        
+        if (method === 'POST') {
+          const bodyText = requestBodyTextarea.value.trim();
+          
+          if (bodyText) {
+            try {
+              body = JSON.parse(bodyText);
+            } catch (e) {
+              updateStatus('Invalid JSON', true);
+              responseData.textContent = 'Error: ' + e.message;
+              return;
+            }
+          }
+        }
+        
+        sendRequest(url, method, body);
+      });
+      
+      // Event listener for clear button
+      clearBtn.addEventListener('click', function() {
+        responseStatus.textContent = '-';
+        responseStatus.className = 'badge bg-secondary';
+        responseTime.textContent = '-';
+        responseData.textContent = 'No response yet';
+        statusBadge.textContent = 'Ready';
+        statusBadge.className = 'badge status-badge bg-secondary';
+      });
+      
+      // Event listener for clear history button
+      clearHistoryBtn.addEventListener('click', function() {
+        requestHistory = [];
+        updateHistoryUI();
+      });
+      
+      // Event listeners for quick test buttons
+      quickTestButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+          const url = this.dataset.url;
+          const method = this.dataset.method || 'GET';
+          let body = null;
+          
+          if (this.dataset.body) {
+            try {
+              body = JSON.parse(this.dataset.body);
+            } catch (e) {
+              console.error('Invalid JSON in button data-body', e);
+              body = this.dataset.body;
+            }
+          }
+          
+          // Update form values
+          endpointUrlInput.value = url;
+          requestMethodSelect.value = method;
+          requestBodyTextarea.value = body ? formatJSON(body) : '';
+          
+          // Send request
+          sendRequest(url, method, body);
+        });
+      });
+    });
+  </script>
+</body>
+</html>
