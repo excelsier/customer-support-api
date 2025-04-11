@@ -164,51 +164,32 @@ app.post('/api/customer-support', async (req, res) => {
     const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || 'your-account-id';
     const CLOUDFLARE_AUTORAG_NAME = process.env.CLOUDFLARE_AUTORAG_NAME || 'sweet-glitter-e320';
     
-    const autoragUrl = `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/autorag/rags/${CLOUDFLARE_AUTORAG_NAME}/ai-search`;
+    // Connect via Cloudflare Worker proxy instead of directly to AutoRAG
+    // URL of the deployed Cloudflare Worker
+    const workerUrl = "https://autorag-proxy.excelsier.workers.dev";
     
+    let response;
     try {
-      // Use the configured Cloudflare credentials to make a real API call
-      console.log(`Connecting to Cloudflare AutoRAG: ${CLOUDFLARE_ACCOUNT_ID}/${CLOUDFLARE_AUTORAG_NAME}`);
+      console.log('Connecting to AutoRAG through Cloudflare Worker proxy...');
+      console.log(`Worker URL: ${workerUrl}`);
       
-      let response;
-      try {
-        // Direct hardcoded credentials - only for production deployment
-        // We're setting this directly since the environment variables
-        // might not be properly accessed in the serverless environment
-        const HARDCODED_TOKEN = 'd8WD_2cCQ3KjQQ5xvUFp3PUWqWdx_wNg5skySkfx';
-        
-        console.log('Attempting to connect to Cloudflare AutoRAG...');
-        console.log(`Account ID: ${CLOUDFLARE_ACCOUNT_ID || 'ced558f4eac9172b07993051961ac91e'}`);
-        console.log(`AutoRAG Name: ${CLOUDFLARE_AUTORAG_NAME || 'sweet-glitter-e320'}`);
-        
-        const cfResponse = await axios.post(autoragUrl, {
-          query: message,
-          model: '@cf/meta/llama-3.1-8b-instruct-fast',
-          rewrite_query: true,
-          max_num_results: 5,
-          ranking_options: {
-            score_threshold: 0.6
-          },
-          stream: false,
-          conversation_history: conversationHistory,
-          system_prompt: "You are a helpful customer support agent for Checkbox."
-        }, {
-          headers: {
-            'Authorization': `Bearer ${HARDCODED_TOKEN}`, // Use hardcoded token directly
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        // Use the actual Cloudflare response
-        response = {
-          status: "success",
-          response: cfResponse.data.result.response,
-          timestamp: new Date().toISOString(),
-          inquiryId: Math.random().toString(36).substring(2, 12),
-          sources: cfResponse.data.result.data.map(doc => ({
-            filename: doc.filename,
-            score: doc.score
-          }))
+      const cfResponse = await axios.post(workerUrl, {
+        query: message,
+        conversation_history: conversationHistory,
+        system_prompt: "You are a helpful customer support agent for Checkbox."
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      // Use the response from the Cloudflare Worker
+      response = {
+        status: "success",
+        response: cfResponse.data.response,
+        timestamp: new Date().toISOString(),
+        inquiryId: Math.random().toString(36).substring(2, 12),
+        sources: cfResponse.data.sources || []
         };
         
         console.log('Successfully received response from Cloudflare AutoRAG');
