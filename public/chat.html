@@ -516,11 +516,10 @@
         try {
           console.log('Sending message to API:', messageText);
           
-          // Send request to API - use the direct endpoint path that should work with our updated API routes
-          // We've updated the Express routes to handle both '/api/customer-support' and '/customer-support'
-          // So we can directly call the customer-support endpoint without additional path segments
-          const apiUrl = '/.netlify/functions/api/customer-support';
-          console.log('Using API URL:', apiUrl);
+          // Use our new dedicated chat-api endpoint which provides a simplified routing path
+          // This bypasses any complex routing issues with the main API
+          const apiUrl = '/.netlify/functions/chat-api';
+          console.log('Using dedicated chat API URL:', apiUrl);
           
           const response = await fetch(apiUrl, {
             method: 'POST',
