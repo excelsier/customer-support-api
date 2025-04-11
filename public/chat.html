@@ -574,21 +574,41 @@
         try {
           console.log('Sending message to API:', messageText);
           
-          // Connect directly to the Cloudflare worker instead of going through Netlify functions
-          // This completely bypasses any routing issues with Netlify's serverless environment
-          const apiUrl = 'https://autorag-proxy.excelsier.workers.dev';
-          console.log('Connecting directly to Cloudflare worker:', apiUrl);
+          // Try multiple API endpoints in sequence to ensure reliability
+          // First try the Netlify function path, then fall back to direct Cloudflare worker if that fails
+          let useDirectWorker = localStorage.getItem('useDirectWorker') === 'true';
+          
+          // If previous attempts used direct worker and failed, try the Netlify function path instead
+          if (localStorage.getItem('directWorkerFailed') === 'true') {
+            useDirectWorker = false;
+            localStorage.setItem('useDirectWorker', 'false');
+            localStorage.removeItem('directWorkerFailed');
+          }
+          
+          const netlifyApiUrl = '/.netlify/functions/api/customer-support';
+          const cloudflareWorkerUrl = 'https://autorag-proxy.excelsier.workers.dev';
+          
+          const apiUrl = useDirectWorker ? cloudflareWorkerUrl : netlifyApiUrl;
+          console.log('Connecting to API:', apiUrl, useDirectWorker ? '(direct worker)' : '(Netlify function)');
           
           const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-              query: messageText,
-              conversation_history: optimizeConversationHistory(conversationHistory),
-              system_prompt: "You are a helpful customer support agent for Checkbox. You should remember the user's questions and maintain context throughout the conversation."
-            })
+            body: JSON.stringify(
+              useDirectWorker ? {
+                // Direct worker request format
+                query: messageText,
+                conversation_history: optimizeConversationHistory(conversationHistory),
+                system_prompt: "You are a helpful customer support agent for Checkbox. You should remember the user's questions and maintain context throughout the conversation."
+              } : {
+                // Netlify function request format
+                message: messageText,
+                email: userProfile.email,
+                name: userProfile.name
+              }
+            )
           });
           
           console.log('API response status:', response.status);
@@ -605,13 +625,26 @@
           // Hide thinking animation
           hideThinking();
           
-          // Format the direct response from Cloudflare worker into our expected format
-          const formattedResponse = {
-            response: data.response,
-            timestamp: new Date().toISOString(),
-            inquiryId: Math.random().toString(36).substring(2, 12),
-            sources: data.sources || []
-          };
+          // Record successful connection method
+          if (useDirectWorker) {
+            localStorage.setItem('useDirectWorker', 'true');
+            localStorage.removeItem('directWorkerFailed');
+          }
+          
+          // Format the response based on which endpoint we used
+          let formattedResponse;
+          if (useDirectWorker) {
+            // Format direct worker response
+            formattedResponse = {
+              response: data.response,
+              timestamp: new Date().toISOString(),
+              inquiryId: Math.random().toString(36).substring(2, 12),
+              sources: data.sources || []
+            };
+          } else {
+            // Netlify function response is already formatted correctly
+            formattedResponse = data;
+          }
           
           // Add AI response to chat
           addMessage(formattedResponse.response, false, new Date(formattedResponse.timestamp), formattedResponse.sources);
@@ -636,6 +669,18 @@
           
           if (errorDetails.includes('rate limit') || errorDetails.includes('429')) {
             errorMessage = `I'm currently experiencing high demand and have reached a rate limit. Please try again in a few moments.`;
+          }
+          
+          // If direct worker connection failed, mark it as failed and suggest trying Netlify function next time
+          if (useDirectWorker) {
+            console.log('Direct worker connection failed, will try Netlify function next time');
+            localStorage.setItem('directWorkerFailed', 'true');
+            localStorage.setItem('useDirectWorker', 'false');
+          } else {
+            // If both methods fail, try toggling between them
+            console.log('Netlify function connection failed, will try direct worker next time');
+            localStorage.setItem('useDirectWorker', 'true');
+            localStorage.removeItem('directWorkerFailed');
           }
           
           // Show error message with details
