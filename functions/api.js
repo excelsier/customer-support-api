@@ -172,6 +172,15 @@ app.post('/api/customer-support', async (req, res) => {
       
       let response;
       try {
+        // Direct hardcoded credentials - only for production deployment
+        // We're setting this directly since the environment variables
+        // might not be properly accessed in the serverless environment
+        const HARDCODED_TOKEN = 'd8WD_2cCQ3KjQQ5xvUFp3PUWqWdx_wNg5skySkfx';
+        
+        console.log('Attempting to connect to Cloudflare AutoRAG...');
+        console.log(`Account ID: ${CLOUDFLARE_ACCOUNT_ID || 'ced558f4eac9172b07993051961ac91e'}`);
+        console.log(`AutoRAG Name: ${CLOUDFLARE_AUTORAG_NAME || 'sweet-glitter-e320'}`);
+        
         const cfResponse = await axios.post(autoragUrl, {
           query: message,
           model: '@cf/meta/llama-3.1-8b-instruct-fast',
@@ -185,7 +194,7 @@ app.post('/api/customer-support', async (req, res) => {
           system_prompt: "You are a helpful customer support agent for Checkbox."
         }, {
           headers: {
-            'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+            'Authorization': `Bearer ${HARDCODED_TOKEN}`, // Use hardcoded token directly
             'Content-Type': 'application/json'
           }
         });
