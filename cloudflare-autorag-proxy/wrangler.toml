@@ -1,6 +1,11 @@
 name = "autorag-proxy"
 main = "src/index.js"
-compatibility_date = "2025-04-11"
+compatibility_date = "2023-12-01"
+
+[kv_namespaces]
+bindings = [
+  { binding = "AUTORAG_CACHE", id = "autorag-cache" }
+]
 
 [vars]
 CLOUDFLARE_ACCOUNT_ID = "ced558f4eac9172b07993051961ac91e"

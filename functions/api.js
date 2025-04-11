@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
+const PersistentCache = require('./persistent-cache');
 
 // Create API app
 const app = express();
@@ -74,13 +75,15 @@ class InMemoryCache {
   }
 }
 
-// Use in-memory cache for serverless environment
-const cache = new InMemoryCache({
+// Use persistent cache for serverless environment
+const cache = new PersistentCache({
   maxCacheSize: process.env.MAX_CACHE_SIZE || 1000,
-  ttl: process.env.CACHE_TTL || 24 * 60 * 60 * 1000
+  ttl: process.env.CACHE_TTL || 24 * 60 * 60,  // TTL in seconds for KV
+  workerUrl: "https://autorag-proxy.excelsier.workers.dev",
+  verbose: true
 });
 
-console.log('Using in-memory cache for serverless environment');
+console.log('Using persistent cache with Cloudflare KV backing');
 
 // Customer profiles (for serverless deployment - using a simpler approach)
 const CUSTOMER_PROFILES = {};
@@ -148,9 +151,12 @@ app.post('/api/customer-support', async (req, res) => {
       context: customer.messages.length > 0
     });
     
-    if (cache.has(cacheKey)) {
+    // Note: has() and get() are now async with PersistentCache
+    const cacheHit = await cache.has(cacheKey);
+    if (cacheHit) {
       console.log(`Cache hit for message: "${message}"`);
-      return res.json(cache.get(cacheKey));
+      const cachedResponse = await cache.get(cacheKey);
+      return res.json(cachedResponse);
     }
     
     // Prepare conversation history for context
@@ -210,8 +216,8 @@ app.post('/api/customer-support', async (req, res) => {
     );
     saveCustomerProfile(customerEmail, customerName, []);
     
-    // Store in cache
-    cache.set(cacheKey, response);
+    // Store in cache (async operation)
+    await cache.set(cacheKey, response);
     
     return res.json(response);
   } catch (error) {
@@ -231,7 +237,7 @@ app.get('/api/status', (req, res) => {
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     customerCount: Object.keys(CUSTOMER_PROFILES).length,
-    cacheStats: cache.getStats()
+    cacheStats: await cache.getStats()
   });
 });
 
