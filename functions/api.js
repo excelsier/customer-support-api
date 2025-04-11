@@ -5,19 +5,82 @@ const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
 
-// Import our custom modules
-const EnhancedCache = require('../enhanced-cache');
-
 // Create API app
 const app = express();
 app.use(bodyParser.json());
 
-// Create a cache instance
-const cache = new EnhancedCache({
-  cacheDir: path.join(__dirname, '../cache'),
-  maxCacheSize: 1000,
-  ttl: 24 * 60 * 60 * 1000 // 24 hours
+// Simple in-memory cache for serverless environment
+class InMemoryCache {
+  constructor(options = {}) {
+    this.cache = new Map();
+    this.maxSize = options.maxCacheSize || 1000;
+    this.ttl = options.ttl || 24 * 60 * 60 * 1000; // 24 hours by default
+  }
+
+  set(key, value) {
+    if (this.cache.size >= this.maxSize) {
+      // Remove oldest entry if at capacity
+      const oldestKey = this.cache.keys().next().value;
+      this.cache.delete(oldestKey);
+    }
+    
+    this.cache.set(key, {
+      value,
+      timestamp: Date.now()
+    });
+    return value;
+  }
+
+  get(key) {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+    
+    // Check if entry has expired
+    if (Date.now() - entry.timestamp > this.ttl) {
+      this.cache.delete(key);
+      return null;
+    }
+    
+    return entry.value;
+  }
+
+  has(key) {
+    const entry = this.cache.get(key);
+    if (!entry) return false;
+    
+    // Check if entry has expired
+    if (Date.now() - entry.timestamp > this.ttl) {
+      this.cache.delete(key);
+      return false;
+    }
+    
+    return true;
+  }
+
+  getStats() {
+    let valid = 0;
+    const now = Date.now();
+    
+    this.cache.forEach(entry => {
+      if (now - entry.timestamp <= this.ttl) {
+        valid++;
+      }
+    });
+    
+    return {
+      total: this.cache.size,
+      valid
+    };
+  }
+}
+
+// Use in-memory cache for serverless environment
+const cache = new InMemoryCache({
+  maxCacheSize: process.env.MAX_CACHE_SIZE || 1000,
+  ttl: process.env.CACHE_TTL || 24 * 60 * 60 * 1000
 });
+
+console.log('Using in-memory cache for serverless environment');
 
 // Customer profiles (for serverless deployment - using a simpler approach)
 const CUSTOMER_PROFILES = {};
