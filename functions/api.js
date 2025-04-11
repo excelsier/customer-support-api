@@ -5,6 +5,8 @@ const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
 const PersistentCache = require('./persistent-cache');
+const { detectComplexIssue } = require('./complex-issue-detector');
+const NotificationService = require('./notification-service');
 
 // Create API app
 const app = express();
@@ -84,6 +86,24 @@ const cache = new PersistentCache({
 });
 
 console.log('Using persistent cache with Cloudflare KV backing');
+
+// Initialize notification service
+const notificationService = new NotificationService({
+  email: {
+    enabled: process.env.ENABLE_EMAIL_NOTIFICATIONS === 'true',
+    recipientEmail: process.env.SUPPORT_EMAIL || 'support@example.com'
+  },
+  slack: {
+    enabled: process.env.ENABLE_SLACK_NOTIFICATIONS === 'true',
+    webhookUrl: process.env.SLACK_WEBHOOK_URL
+  },
+  logging: {
+    enabled: true,
+    level: process.env.LOG_LEVEL || 'info'
+  }
+});
+
+console.log('Notification service initialized');
 
 // Customer profiles (for serverless deployment - using a simpler approach)
 const CUSTOMER_PROFILES = {};
@@ -197,6 +217,25 @@ app.post('/api/customer-support', async (req, res) => {
       };
       
       console.log('Successfully received response from Cloudflare AutoRAG');
+      
+      // Check if this is a complex issue that needs human attention
+      const complexIssueResult = detectComplexIssue(
+        cfResponse.data.response,
+        cfResponse.data.sources || [],
+        { lowConfidenceThreshold: 0.7 }
+      );
+      
+      if (complexIssueResult.isComplex) {
+        console.log(`Complex issue detected: ${complexIssueResult.reasons.join(', ')}`);
+        
+        // Notify about complex issue
+        await notificationService.notifyComplexIssue({
+          message: message,
+          email: customerEmail,
+          response: cfResponse.data.response,
+          reasons: complexIssueResult.reasons
+        });
+      }
     } catch (cloudflareError) {
       console.error('Error connecting to Cloudflare:', cloudflareError.message);
       
@@ -237,7 +276,43 @@ app.get('/api/status', async (req, res) => {
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     customerCount: Object.keys(CUSTOMER_PROFILES).length,
-    cacheStats: await cache.getStats()
+    cacheStats: await cache.getStats(),
+    notificationCount: notificationService.notificationCount || 0
+  });
+});
+
+// Admin dashboard for monitoring
+app.get('/admin', (req, res) => {
+  const dashboardHtml = fs.readFileSync(path.join(__dirname, '../public/admin-dashboard.html'), 'utf8');
+  res.send(dashboardHtml);
+});
+
+// API endpoint for recent inquiries
+app.get('/api/recent-inquiries', (req, res) => {
+  // Get most recent inquiries from customer profiles
+  const recentInquiries = [];
+  
+  Object.values(CUSTOMER_PROFILES).forEach(profile => {
+    const userMessages = profile.messages.filter(msg => msg.role === 'user');
+    const assistantMessages = profile.messages.filter(msg => msg.role === 'assistant');
+    
+    for (let i = 0; i < userMessages.length; i++) {
+      if (recentInquiries.length >= 10) break;
+      
+      recentInquiries.push({
+        timestamp: new Date(profile.lastSeen).toISOString(),
+        email: profile.email,
+        query: userMessages[i]?.content || '',
+        response: assistantMessages[i]?.content || ''
+      });
+    }
+  });
+  
+  // Sort by timestamp, most recent first
+  recentInquiries.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  
+  res.json({
+    inquiries: recentInquiries.slice(0, 10)
   });
 });
 

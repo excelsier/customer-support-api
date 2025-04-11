@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Customer Support - Admin Dashboard</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --primary-color: #3f51b5;
+      --secondary-color: #f50057;
+      --success-color: #4caf50;
+      --warning-color: #ff9800;
+      --danger-color: #f44336;
+      --light-color: #f5f5f5;
+      --dark-color: #212121;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background-color: #f9f9ff;
+      color: var(--dark-color);
+      line-height: 1.6;
+    }
+    
+    .navbar-brand {
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    
+    .card {
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin-bottom: 24px;
+      border: none;
+    }
+    
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+    }
+    
+    .card-header {
+      border-radius: 12px 12px 0 0 !important;
+      font-weight: 600;
+      background-color: rgba(63, 81, 181, 0.1);
+      color: var(--primary-color);
+      border-bottom: none;
+    }
+    
+    .stats-card {
+      text-align: center;
+      padding: 1.5rem;
+    }
+    
+    .stats-number {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      color: var(--primary-color);
+    }
+    
+    .stats-label {
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #666;
+    }
+    
+    .table {
+      font-size: 0.95rem;
+    }
+    
+    .table th {
+      font-weight: 600;
+      color: var(--primary-color);
+    }
+    
+    .badge {
+      font-weight: 500;
+      padding: 0.5em 0.75em;
+    }
+    
+    .text-truncate-2 {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    
+    .btn-refresh {
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      transition: all 0.3s;
+    }
+    
+    .btn-refresh:hover {
+      background-color: #303f9f;
+      transform: scale(1.05);
+    }
+    
+    .loader {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid var(--primary-color);
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+      display: none;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .customer-initials {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background-color: var(--primary-color);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      margin-right: 10px;
+    }
+    
+    .timeline {
+      position: relative;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .timeline::after {
+      content: '';
+      position: absolute;
+      width: 2px;
+      background-color: #e0e0e0;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      margin-left: -1px;
+    }
+    
+    .container-fluid {
+      padding: 10px 40px;
+      position: relative;
+      width: 50%;
+    }
+    
+    .chart-container {
+      position: relative;
+      height: 300px;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">Customer Support Admin</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav">
+          <li class="nav-item">
+            <a class="nav-link active" href="#">Dashboard</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#">Analytics</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#">Settings</a>
+          </li>
+        </ul>
+      </div>
+      <span class="navbar-text" id="last-updated">
+        Last updated: --/--/---- --:--
+      </span>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2>Performance Dashboard</h2>
+      <button id="refresh-btn" class="btn btn-refresh">
+        <i class="bi bi-arrow-clockwise"></i> Refresh Data
+      </button>
+    </div>
+    
+    <div id="loader" class="loader"></div>
+    
+    <div class="row">
+      <div class="col-md-3">
+        <div class="card stats-card">
+          <div class="stats-number" id="customerCount">0</div>
+          <div class="stats-label">Total Customers</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card stats-card">
+          <div class="stats-number" id="cacheSize">0</div>
+          <div class="stats-label">Cache Entries</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card stats-card">
+          <div class="stats-number" id="cacheHits">0</div>
+          <div class="stats-label">Valid Cache Items</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card stats-card">
+          <div class="stats-number" id="complexIssues">0</div>
+          <div class="stats-label">Complex Issues</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="row mt-4">
+      <div class="col-lg-12">
+        <div class="card">
+          <div class="card-header">
+            Recent Customer Inquiries
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-hover">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Customer</th>
+                    <th>Query</th>
+                    <th>Response</th>
+                  </tr>
+                </thead>
+                <tbody id="recent-inquiries">
+                  <tr>
+                    <td colspan="4" class="text-center">Loading recent inquiries...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="row mt-2">
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header">
+            System Status
+          </div>
+          <div class="card-body">
+            <p><strong>Environment:</strong> <span id="environment">Loading...</span></p>
+            <p><strong>Status:</strong> <span id="status" class="badge bg-success">Operational</span></p>
+            <p><strong>Cache Performance:</strong> <span id="cachePerformance">Loading...</span></p>
+            <p><strong>API Response Time:</strong> <span id="responseTime">Loading...</span></p>
+            <div class="d-grid gap-2">
+              <button class="btn btn-outline-primary" type="button" id="warm-cache-btn">Pre-warm Popular Queries</button>
+              <button class="btn btn-outline-secondary" type="button" id="clear-cache-btn">Clear Cache</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header">
+            Quick Actions
+          </div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label for="test-query" class="form-label">Test Customer Support Query</label>
+              <input type="text" class="form-control" id="test-query" placeholder="Enter a test query...">
+            </div>
+            <div class="d-grid gap-2">
+              <button class="btn btn-primary" type="button" id="send-query-btn">Send Test Query</button>
+            </div>
+            <div class="mt-3">
+              <div id="test-response" class="p-3 bg-light rounded" style="display: none;">
+                <h6>Response:</h6>
+                <p id="response-text"></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // Dashboard functionality
+    document.addEventListener('DOMContentLoaded', function() {
+      // Initialize variables
+      let lastUpdated = new Date();
+      let cacheHitCount = 0;
+      let totalRequests = 0;
+      
+      // References to DOM elements
+      const refreshBtn = document.getElementById('refresh-btn');
+      const loader = document.getElementById('loader');
+      const lastUpdatedEl = document.getElementById('last-updated');
+      const customerCountEl = document.getElementById('customerCount');
+      const cacheSizeEl = document.getElementById('cacheSize');
+      const cacheHitsEl = document.getElementById('cacheHits');
+      const complexIssuesEl = document.getElementById('complexIssues');
+      const recentInquiriesEl = document.getElementById('recent-inquiries');
+      const environmentEl = document.getElementById('environment');
+      const statusEl = document.getElementById('status');
+      const cachePerformanceEl = document.getElementById('cachePerformance');
+      const responseTimeEl = document.getElementById('responseTime');
+      const warmCacheBtn = document.getElementById('warm-cache-btn');
+      const clearCacheBtn = document.getElementById('clear-cache-btn');
+      const testQueryInput = document.getElementById('test-query');
+      const sendQueryBtn = document.getElementById('send-query-btn');
+      const testResponseDiv = document.getElementById('test-response');
+      const responseTextEl = document.getElementById('response-text');
+      
+      // Function to format date and time
+      function formatDateTime(date) {
+        return new Intl.DateTimeFormat('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        }).format(date);
+      }
+      
+      // Function to truncate text
+      function truncateText(text, maxLength = 100) {
+        if (!text) return '';
+        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+      }
+      
+      // Function to load dashboard data
+      async function loadDashboardData() {
+        loader.style.display = 'block';
+        
+        try {
+          // Fetch system status
+          const statusResponse = await fetch('/api/status');
+          const statusData = await statusResponse.json();
+          
+          // Update system stats
+          customerCountEl.textContent = statusData.customerCount || 0;
+          cacheSizeEl.textContent = statusData.cacheStats?.total || 0;
+          cacheHitsEl.textContent = statusData.cacheStats?.valid || 0;
+          complexIssuesEl.textContent = statusData.notificationCount || 0;
+          environmentEl.textContent = statusData.environment;
+          
+          // Calculate cache performance
+          const cachePerformance = statusData.cacheStats?.total > 0 
+            ? Math.round((statusData.cacheStats.valid / statusData.cacheStats.total) * 100) 
+            : 0;
+          cachePerformanceEl.textContent = `${cachePerformance}% efficiency`;
+          
+          // Set simulated response time
+          const randomResponseTime = Math.floor(Math.random() * 200) + 50;
+          responseTimeEl.textContent = `${randomResponseTime}ms`;
+          
+          // Fetch recent inquiries
+          const inquiriesResponse = await fetch('/api/recent-inquiries');
+          const inquiriesData = await inquiriesResponse.json();
+          
+          // Update recent inquiries table
+          if (inquiriesData.inquiries && inquiriesData.inquiries.length > 0) {
+            recentInquiriesEl.innerHTML = inquiriesData.inquiries.map(inquiry => `
+              <tr>
+                <td>${new Date(inquiry.timestamp).toLocaleTimeString()}</td>
+                <td>
+                  <div class="d-flex align-items-center">
+                    <div class="customer-initials">
+                      ${inquiry.email.substring(0, 2).toUpperCase()}
+                    </div>
+                    ${inquiry.email}
+                  </div>
+                </td>
+                <td class="text-truncate-2" style="max-width: 200px;">
+                  ${truncateText(inquiry.query)}
+                </td>
+                <td class="text-truncate-2" style="max-width: 300px;">
+                  ${truncateText(inquiry.response)}
+                </td>
+              </tr>
+            `).join('');
+          } else {
+            recentInquiriesEl.innerHTML = `
+              <tr>
+                <td colspan="4" class="text-center">No recent inquiries found</td>
+              </tr>
+            `;
+          }
+          
+          // Update last updated time
+          lastUpdated = new Date();
+          lastUpdatedEl.textContent = `Last updated: ${formatDateTime(lastUpdated)}`;
+        } catch (error) {
+          console.error('Error loading dashboard data:', error);
+          statusEl.textContent = 'Error';
+          statusEl.className = 'badge bg-danger';
+        } finally {
+          loader.style.display = 'none';
+        }
+      }
+      
+      // Function to send test query
+      async function sendTestQuery(query) {
+        if (!query) return;
+        
+        testResponseDiv.style.display = 'none';
+        loader.style.display = 'block';
+        
+        try {
+          const startTime = performance.now();
+          
+          const response = await fetch('/api/customer-support', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              message: query,
+              email: 'admin@dashboard.com',
+              name: 'Admin Tester'
+            })
+          });
+          
+          const endTime = performance.now();
+          const responseTime = Math.round(endTime - startTime);
+          responseTimeEl.textContent = `${responseTime}ms`;
+          
+          const data = await response.json();
+          
+          responseTextEl.textContent = data.response;
+          testResponseDiv.style.display = 'block';
+          
+          // Update total requests and reload dashboard data
+          totalRequests++;
+          loadDashboardData();
+        } catch (error) {
+          console.error('Error sending test query:', error);
+          responseTextEl.textContent = 'Error: Failed to get response from the API';
+          testResponseDiv.style.display = 'block';
+        } finally {
+          loader.style.display = 'none';
+        }
+      }
+      
+      // Function to pre-warm cache
+      async function warmCache() {
+        const popularQueries = [
+          'How do I reset my password?',
+          'Where can I find my account settings?',
+          'How can I contact customer support?',
+          'What payment methods do you accept?',
+          'How do I cancel my subscription?'
+        ];
+        
+        warmCacheBtn.disabled = true;
+        warmCacheBtn.textContent = 'Pre-warming...';
+        loader.style.display = 'block';
+        
+        try {
+          // Send all queries in parallel
+          await Promise.all(popularQueries.map(async (query) => {
+            try {
+              await fetch('/api/customer-support', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  message: query,
+                  email: 'cache-warmer@system.com',
+                  name: 'Cache Warmer'
+                })
+              });
+            } catch (error) {
+              console.error(`Error pre-warming cache with query "${query}":`, error);
+            }
+          }));
+          
+          // Reload dashboard data
+          await loadDashboardData();
+          
+          alert('Cache pre-warming completed!');
+        } catch (error) {
+          console.error('Error pre-warming cache:', error);
+          alert('Error pre-warming cache. Please try again.');
+        } finally {
+          warmCacheBtn.disabled = false;
+          warmCacheBtn.textContent = 'Pre-warm Popular Queries';
+          loader.style.display = 'none';
+        }
+      }
+      
+      // Event listeners
+      refreshBtn.addEventListener('click', loadDashboardData);
+      
+      warmCacheBtn.addEventListener('click', warmCache);
+      
+      clearCacheBtn.addEventListener('click', function() {
+        // Simulate cache clearing
+        cacheSizeEl.textContent = '0';
+        cacheHitsEl.textContent = '0';
+        alert('Cache has been cleared!');
+      });
+      
+      sendQueryBtn.addEventListener('click', function() {
+        sendTestQuery(testQueryInput.value);
+      });
+      
+      testQueryInput.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+          sendTestQuery(testQueryInput.value);
+        }
+      });
+      
+      // Initialize dashboard
+      loadDashboardData();
+      
+      // Set up auto-refresh every 60 seconds
+      setInterval(loadDashboardData, 60000);
+    });
+  </script>
+</body>
+</html>
