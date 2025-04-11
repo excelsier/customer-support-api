@@ -231,7 +231,7 @@ app.post('/api/customer-support', async (req, res) => {
 });
 
 // Status/health endpoint
-app.get('/api/status', (req, res) => {
+app.get('/api/status', async (req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
